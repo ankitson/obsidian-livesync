@@ -18,7 +18,7 @@ import {
     getStoragePathFromUXFileInfo,
     markChangesAreSame,
 } from "../../common/utils";
-import { getDocDataAsArray, isDocContentSame, readAsBlob, readContent } from "../../lib/src/common/utils";
+import { getDocDataAsArray, isDocContentSame, readAsBlob, readContent, readContentSize } from "../../lib/src/common/utils";
 import { shouldBeIgnored } from "../../lib/src/string_and_binary/path";
 import { Semaphore } from "octagonal-wheels/concurrency/semaphore";
 import { eventHub } from "../../common/events.ts";
@@ -265,9 +265,13 @@ export class ModuleFileHandler extends AbstractModule {
         if (!this.settings.processSizeMismatchedFiles) {
             // Check the file is not corrupted
             // (Zero is a special case, may be created by some APIs and it might be acceptable).
-            if (docRead.size != 0 && docRead.size !== readAsBlob(docRead).size) {
+            // We use readContentSize (which decodes via readContent, the same path used for the
+            // actual file write below) instead of readAsBlob().size, because Blob.size can differ
+            // across platforms (Electron vs iOS WebKit) for the same text content.
+            const contentSize = readContentSize(docRead);
+            if (docRead.size != 0 && docRead.size !== contentSize) {
                 this._log(
-                    `File ${path} seems to be corrupted! Writing prevented. (${docRead.size} != ${readAsBlob(docRead).size})`,
+                    `File ${path} seems to be corrupted! Writing prevented. (${docRead.size} != ${contentSize})`,
                     LOG_LEVEL_NOTICE
                 );
                 return false;
